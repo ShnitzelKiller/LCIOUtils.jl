@@ -1,5 +1,5 @@
 module LCIOUtils
-export getPositions, mappositions, mapparticles, maptruthparticles, hcal_outer, hcal_inner, ecal_inner, ecal_outer, hcal_length, ecal_length, radiationLength, interactionLength, inertiatensor, append
+export getpositions, mappositions, mapparticles, maptruthparticles, hcal_outer, hcal_inner, ecal_inner, ecal_outer, hcal_length, ecal_length, radiationLength, interactionLength, inertiatensor, append
 
 using LCIO
 using DataStructures
