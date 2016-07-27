@@ -1,5 +1,5 @@
 module LCIOUtils
-export getpositions, mappositions, mapparticles, maptruthparticles, hcal_outer, hcal_inner, ecal_inner, ecal_outer, hcal_length, ecal_length, radiationLength, interactionLength, inertiatensor, append
+export getpositions, mappositions, mapparticles, maptruthparticles, numfaces, hcal_outer, hcal_inner, ecal_inner, ecal_outer, hcal_length, ecal_length, radiationLength, interactionLength, inertiatensor, append
 
 using LCIO
 using DataStructures
@@ -8,6 +8,7 @@ using DataStructures
 const hcal_outer = 2495
 const hcal_inner = 1419
 const hcal_length = 6036
+const numfaces = 8
 
 const ecal_inner = 1265
 const ecal_outer = 1403.5
