@@ -126,12 +126,7 @@ function mappositions(f, filename, startevent, endevent, collectionname="Pandora
                         positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
                     end
                 end
-                len = length(positions)
-                positionsvec = Array(Float64, 4, len)
-                for (j, pos) in enumerate(positions)
-                    positionsvec[:,j] = pos
-                end
-                f(positionsvec, i, maxEnergy, momentum, particletype)
+                f(hcat(positions...), i, maxEnergy, momentum, particletype)
             end
         end
     end
@@ -160,12 +155,7 @@ function mapparticles(f, filename, startevent, endevent, collectionname="Pandora
                     for hit in LCIO.getParticleHits(c)
                         positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
                     end
-                    len = length(positions)
-                    positionsvec = Array(Float64, 4, len)
-                    for (j, pos) in enumerate(positions)
-                        positionsvec[:,j] = pos
-                    end
-                    f(positionsvec, i, maxEnergy, momentum, particletype)
+                    f(hcat(positions...), i, maxEnergy, momentum, particletype)
                 end
             end
         end
