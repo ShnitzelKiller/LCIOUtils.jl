@@ -85,7 +85,7 @@ function mapcollections(f, filename, startevent, endevent, collections...)
     LCIO.iterate(filename) do event
         i += 1
         positions = nil(Vector{Float64})
-        if i >= startevent
+        if endevent >= i >= startevent
             for name in LCIO.getCollectionNameArray(event)
                 for tname in collections
                     if name == tname
@@ -113,7 +113,7 @@ function mappositions(f, filename, startevent, endevent, collectionname="Pandora
     i = 0
     LCIO.iterate(filename) do event
         i += 1
-        if i >= startevent
+        if endevent >= i >= startevent
             for name in LCIO.getCollectionNameArray(event)
                 if name == collectionname
                     collection = LCIO.getCollection(event, collectionname)
@@ -151,7 +151,7 @@ function mapparticles(f, filename, startevent, endevent, collectionname="Pandora
     i = 0
     LCIO.iterate(filename) do event
         i += 1
-        if i >= startevent
+        if endevent >= i >= startevent
             for name in LCIO.getCollectionNameArray(event)
                 if name == collectionname
                     collection = LCIO.getCollection(event, collectionname)
@@ -184,7 +184,7 @@ function maptruthparticles(f, filename, startevent, endevent)
     i = 0
     LCIO.iterate(filename) do event
         i += 1
-        if idx >= startevent
+        if endevent >= idx >= startevent
             particleHits = Dict{Ptr{Void}, Dict}()
             ee = getCollection(i, "EcalEndcapHits")
             eb = getCollection(i, "EcalBarrelHits")
