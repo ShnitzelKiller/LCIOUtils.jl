@@ -42,6 +42,16 @@ function inertiatensor(positions::Matrix)
     return inertia
 end
 
+function getParticleHits(p)
+    hitList = CalHit[]
+    for c in getClusters(p)
+        for h in getCalorimeterHits(c)
+            push!(hitList, CalHit(h))
+        end
+    end
+    hitList
+end
+
 """
   getPositions(fileName, collectionName, eventNum=1)
 
@@ -50,26 +60,26 @@ The collection to read from is `collectionName`, and the event index is `eventNu
 Currently only works for PandoraPFOCollection.
 """
 function getpositions(filename, collectionName="PandoraPFOCollection", eventNum=1)
-    idx = 0
-    LCIO.iterate(filename) do event
-        idx += 1
-        if (idx == eventNum)
-            for name in LCIO.getCollectionNames(event)
-                if (name == collectionName)
-                    # collection = LCIO.getCollection(event, name)
-                    collection = LCIO.getCollection(event, collectionName)
-                    positions = Array(Float64, 4, 0)
+    LCIO.open(filename) do reader
+        for (idx, event) in zip(1:eventNum, reader)
+            if (idx == eventNum)
+                for name in LCIO.getCollectionNames(event)
+                    if (name == collectionName)
+                        # collection = LCIO.getCollection(event, name)
+                        collection = LCIO.getCollection(event, collectionName)
+                        positions = Array(Float64, 4, 0)
 
-                    for (hitnum, c) in enumerate(collection)
-                        for hit in LCIO.getParticleHits(c)
-                            positions = hcat(positions, [hit.x, hit.y, hit.z, hit.E])
+                        for (hitnum, c) in enumerate(collection)
+                            for hit in getParticleHits(c)
+                                positions = hcat(positions, [hit.x, hit.y, hit.z, hit.E])
+                            end
                         end
+                        return positions
                     end
-                    return positions
                 end
+                println("No collection named $(collectionName)")
+                throw(KeyError(collectionName))
             end
-            println("No collection named $(collectionName)")
-            throw(KeyError(collectionName))
         end
     end
 end
@@ -81,12 +91,11 @@ Map a function f(positionvec4, i) over the specified collections from the specif
 start to end event.
 """
 function mapcollections(f, filename, startevent, endevent, collections...)
-    i = 0
-    LCIO.iterate(filename) do event
-        i += 1
-        positions = nil(Vector{Float64})
-        if endevent >= i >= startevent
-            for name in LCIO.getCollectionNameArray(event)
+    LCIO.open(filename) do reader
+        for (i, event) in zip(1:endevent, reader)
+            if i < startevent continue end
+            positions = nil(Vector{Float64})
+            for name in LCIO.getCollectionNames(event)
                 for tname in collections
                     if name == tname
                         collection = LCIO.getCollection(event, tname)
@@ -110,11 +119,10 @@ event number `i`, reconstructed energy `maxenergy`, 3-momentum, and particle typ
 Currently only works for PandoraPFOCollection. Only considers one particle per event (with maximum energy)
 """
 function mappositions(f, filename, startevent, endevent, collectionname="PandoraPFOCollection")
-    i = 0
-    LCIO.iterate(filename) do event
-        i += 1
-        if endevent >= i >= startevent
-            for name in LCIO.getCollectionNameArray(event)
+    LCIO.open(filename) do reader
+        for (i, event) in zip(1:endevent, reader)
+            if i < startevent continue end
+            for name in LCIO.getCollectionNames(event)
                 if name == collectionname
                     collection = LCIO.getCollection(event, collectionname)
                     positions = nil(Vector{Float64})
@@ -124,11 +132,11 @@ function mappositions(f, filename, startevent, endevent, collectionname="Pandora
                     for c in collection
                         p4vec = LCIO.getP4(c)
                         if p4vec.t > maxEnergy
-                            particletype = getParticleID(c)
+                            particletype = getType(c)
                             maxEnergy = p4vec.t
                             momentum = [p4vec.x, p4vec.y, p4vec.z]
                         end
-                        for hit in LCIO.getParticleHits(c)
+                        for hit in getParticleHits(c)
                             positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
                         end
                     end
@@ -148,11 +156,10 @@ event number `i`, reconstructed energy `maxenergy`, momentum, and particle type 
 Currently only works for PandoraPFOCollection.
 """
 function mapparticles(f, filename, startevent, endevent, collectionname="PandoraPFOCollection")
-    i = 0
-    LCIO.iterate(filename) do event
-        i += 1
-        if endevent >= i >= startevent
-            for name in LCIO.getCollectionNameArray(event)
+    LCIO.iterate(filename) do reader
+        for (i, event) in zip(1:endevent, reader)
+            if i < startevent continue end
+            for name in LCIO.getCollectionNames(event)
                 if name == collectionname
                     collection = LCIO.getCollection(event, collectionname)
                     for c in collection
@@ -160,8 +167,8 @@ function mapparticles(f, filename, startevent, endevent, collectionname="Pandora
                         p4vec = LCIO.getP4(c)
                         maxEnergy = p4vec.t
                         momentum = [p4vec.x, p4vec.y, p4vec.z]
-                        particletype = getParticleID(c)
-                        for hit in LCIO.getParticleHits(c)
+                        particletype = getType(c)
+                        for hit in getParticleHits(c)
                             positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
                         end
                         f(hcat(positions...), i, maxEnergy, momentum, particletype)
@@ -181,10 +188,9 @@ Hits are assigned to their true particles, with energies scaled to account for s
 `positionvec4` is a 4xn matrix where n is the number of hits, and the last component is the energy.
 """
 function maptruthparticles(f, filename, startevent, endevent)
-    i = 0
-    LCIO.iterate(filename) do event
-        i += 1
-        if endevent >= idx >= startevent
+    LCIO.open(filename) do event
+        for (i, event) in zip(1:endevent, reader)
+            if startevent < i continue end
             particleHits = Dict{Ptr{Void}, Dict}()
             ee = getCollection(i, "EcalEndcapHits")
             eb = getCollection(i, "EcalBarrelHits")
