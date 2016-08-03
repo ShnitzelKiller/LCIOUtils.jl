@@ -49,14 +49,15 @@ Get the position/energy matrix of calorimeter hits in the slcio file, where each
 The collection to read from is `collectionName`, and the event index is `eventNum`.
 Currently only works for PandoraPFOCollection.
 """
-function getpositions(filename, collectionName, eventNum=1)
-    for (idx, event) in enumerate(LCIO.open(filename))
-        #println("idx: $(idx), eventNum: $(eventNum), equal: $(idx == eventNum)")
+function getpositions(filename, collectionName="PandoraPFOCollection", eventNum=1)
+    idx = 0
+    LCIO.iterate(filename) do event
+        idx += 1
         if (idx == eventNum)
-            for name in LCIO.getCollectionNameArray(event)
+            for name in LCIO.getCollectionNames(event)
                 if (name == collectionName)
                     # collection = LCIO.getCollection(event, name)
-                    collection = LCIO.getCollection(event, "PandoraPFOCollection")
+                    collection = LCIO.getCollection(event, collectionName)
                     positions = Array(Float64, 4, 0)
 
                     for (hitnum, c) in enumerate(collection)
@@ -80,20 +81,23 @@ Map a function f(positionvec4, i) over the specified collections from the specif
 start to end event.
 """
 function mapcollections(f, filename, startevent, endevent, collections...)
-    for (i, event) in zip(1:endevent, LCIO.open(filename))
+    i = 0
+    LCIO.iterate(filename) do event
+        i += 1
         positions = nil(Vector{Float64})
-        if i < startevent continue end
-        for name in LCIO.getCollectionNameArray(event)
-            for tname in collections
-                if name == tname
-                    collection = LCIO.getCollection(event, tname)
-                    for hit in collection
-                        positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
+        if i >= startevent
+            for name in LCIO.getCollectionNameArray(event)
+                for tname in collections
+                    if name == tname
+                        collection = LCIO.getCollection(event, tname)
+                        for hit in collection
+                            positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
+                        end
                     end
                 end
             end
+            f(hcat(positions...), i)
         end
-        f(hcat(positions...), i)
     end
 end
 
@@ -106,27 +110,30 @@ event number `i`, reconstructed energy `maxenergy`, 3-momentum, and particle typ
 Currently only works for PandoraPFOCollection. Only considers one particle per event (with maximum energy)
 """
 function mappositions(f, filename, startevent, endevent, collectionname="PandoraPFOCollection")
-    for (i, event) in zip(1:endevent, LCIO.open(filename))
-        if i < startevent continue end
-        for name in LCIO.getCollectionNameArray(event)
-            if name == collectionname
-                collection = LCIO.getCollection(event, collectionname)
-                positions = nil(Vector{Float64})
-                maxEnergy = 0.0
-                momentum = Float64[0, 0, 0]
-                particletype = 0
-                for c in collection
-                    p4vec = LCIO.getP4(c)
-                    if p4vec.t > maxEnergy
-                        particletype = getParticleID(c)
-                        maxEnergy = p4vec.t
-                        momentum = [p4vec.x, p4vec.y, p4vec.z]
+    i = 0
+    LCIO.iterate(filename) do event
+        i += 1
+        if i >= startevent
+            for name in LCIO.getCollectionNameArray(event)
+                if name == collectionname
+                    collection = LCIO.getCollection(event, collectionname)
+                    positions = nil(Vector{Float64})
+                    maxEnergy = 0.0
+                    momentum = Float64[0, 0, 0]
+                    particletype = 0
+                    for c in collection
+                        p4vec = LCIO.getP4(c)
+                        if p4vec.t > maxEnergy
+                            particletype = getParticleID(c)
+                            maxEnergy = p4vec.t
+                            momentum = [p4vec.x, p4vec.y, p4vec.z]
+                        end
+                        for hit in LCIO.getParticleHits(c)
+                            positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
+                        end
                     end
-                    for hit in LCIO.getParticleHits(c)
-                        positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
-                    end
+                    f(hcat(positions...), i, maxEnergy, momentum, particletype)
                 end
-                f(hcat(positions...), i, maxEnergy, momentum, particletype)
             end
         end
     end
@@ -141,21 +148,24 @@ event number `i`, reconstructed energy `maxenergy`, momentum, and particle type 
 Currently only works for PandoraPFOCollection.
 """
 function mapparticles(f, filename, startevent, endevent, collectionname="PandoraPFOCollection")
-    for (i, event) in zip(1:endevent, LCIO.open(filename))
-        if i < startevent continue end
-        for name in LCIO.getCollectionNameArray(event)
-            if name == collectionname
-                collection = LCIO.getCollection(event, collectionname)
-                for c in collection
-                    positions = nil(Vector{Float64})
-                    p4vec = LCIO.getP4(c)
-                    maxEnergy = p4vec.t
-                    momentum = [p4vec.x, p4vec.y, p4vec.z]
-                    particletype = getParticleID(c)
-                    for hit in LCIO.getParticleHits(c)
-                        positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
+    i = 0
+    LCIO.iterate(filename) do event
+        i += 1
+        if i >= startevent
+            for name in LCIO.getCollectionNameArray(event)
+                if name == collectionname
+                    collection = LCIO.getCollection(event, collectionname)
+                    for c in collection
+                        positions = nil(Vector{Float64})
+                        p4vec = LCIO.getP4(c)
+                        maxEnergy = p4vec.t
+                        momentum = [p4vec.x, p4vec.y, p4vec.z]
+                        particletype = getParticleID(c)
+                        for hit in LCIO.getParticleHits(c)
+                            positions = cons([hit.x, hit.y, hit.z, hit.E], positions)
+                        end
+                        f(hcat(positions...), i, maxEnergy, momentum, particletype)
                     end
-                    f(hcat(positions...), i, maxEnergy, momentum, particletype)
                 end
             end
         end
@@ -171,56 +181,59 @@ Hits are assigned to their true particles, with energies scaled to account for s
 `positionvec4` is a 4xn matrix where n is the number of hits, and the last component is the energy.
 """
 function maptruthparticles(f, filename, startevent, endevent)
-    for (idx, i) in zip(1:endevent, LCIO.open(filename))
-        if idx < startevent continue end
-        particleHits = Dict{Ptr{Void}, Dict}()
-        ee = getCollection(i, "EcalEndcapHits")
-        eb = getCollection(i, "EcalBarrelHits")
-        he = getCollection(i, "HcalEndcapHits")
-        hb = getCollection(i, "HcalBarrelHits")
-        for relation in getCollection(i, "CalorimeterHitRelations")
-        	calibratedHit = getRelationFrom(relation)
-        	simCaloHit = getRelationTo(relation)
-        	pList = getHitMCParticles(simCaloHit)
-        	p4 = getCaloHit(calibratedHit)
-        	energyList = getHitEnergyList(simCaloHit)
-        	simCaloHitEnergy = sum(energyList)
-        	# TODO map the particles to the Hits, but correct the hit energy by the sampling fraction
-        	# maybe look at energy spread within the cluster
-            if (simCaloHit in eb) || (simCaloHit in ee)
-                collectionName = "ECAL"
-            elseif (simCaloHit in hb) || (simCaloHit in he)
-                collectionName = "HCAL"
-            else
-                # skip muonhits
-                continue
-            end
-            for (kdx, particle) in enumerate(pList)
-                h = LCIO.CalHit(p4, energyList[kdx]*p4.E/simCaloHitEnergy)
-                if haskey(particleHits, particle)
-                    push!(particleHits[particle][collectionName], h)
+    i = 0
+    LCIO.iterate(filename) do event
+        i += 1
+        if idx >= startevent
+            particleHits = Dict{Ptr{Void}, Dict}()
+            ee = getCollection(i, "EcalEndcapHits")
+            eb = getCollection(i, "EcalBarrelHits")
+            he = getCollection(i, "HcalEndcapHits")
+            hb = getCollection(i, "HcalBarrelHits")
+            for relation in getCollection(i, "CalorimeterHitRelations")
+            	calibratedHit = getRelationFrom(relation)
+            	simCaloHit = getRelationTo(relation)
+            	pList = getHitMCParticles(simCaloHit)
+            	p4 = getCaloHit(calibratedHit)
+            	energyList = getHitEnergyList(simCaloHit)
+            	simCaloHitEnergy = sum(energyList)
+            	# TODO map the particles to the Hits, but correct the hit energy by the sampling fraction
+            	# maybe look at energy spread within the cluster
+                if (simCaloHit in eb) || (simCaloHit in ee)
+                    collectionName = "ECAL"
+                elseif (simCaloHit in hb) || (simCaloHit in he)
+                    collectionName = "HCAL"
                 else
-                    particleHits[particle] = Dict("ECAL" => LCIO.CalHit[], "HCAL" => LCIO.CalHit[])
+                    # skip muonhits
+                    continue
+                end
+                for (kdx, particle) in enumerate(pList)
+                    h = LCIO.CalHit(p4, energyList[kdx]*p4.E/simCaloHitEnergy)
+                    if haskey(particleHits, particle)
+                        push!(particleHits[particle][collectionName], h)
+                    else
+                        particleHits[particle] = Dict("ECAL" => LCIO.CalHit[], "HCAL" => LCIO.CalHit[])
+                    end
                 end
             end
-        end
 
-        for (p, hitDictionary) in particleHits
-            p4 = getMCP4(p)
-            pdg = getMCPDGid(p)
-            len1 = length(hitDictionary["ECAL"])
-            len2 = length(hitDictionary["HCAL"])
-            positions = Array(Float64, 4, len1+len2)
-            ind = 1
-            for hit in hitDictionary["ECAL"]
-                positions[:, ind] = [hit.x, hit.y, hit.z, hit.E]
-                ind += 1
+            for (p, hitDictionary) in particleHits
+                p4 = getMCP4(p)
+                pdg = getMCPDGid(p)
+                len1 = length(hitDictionary["ECAL"])
+                len2 = length(hitDictionary["HCAL"])
+                positions = Array(Float64, 4, len1+len2)
+                ind = 1
+                for hit in hitDictionary["ECAL"]
+                    positions[:, ind] = [hit.x, hit.y, hit.z, hit.E]
+                    ind += 1
+                end
+                for hit in hitDictionary["HCAL"]
+                    positions[:, ind] = [hit.x, hit.y, hit.z, hit.E]
+                    ind += 1
+                end
+                f(positions, idx, p4.t, [p4.x, p4.y, p4.z], pdg)
             end
-            for hit in hitDictionary["HCAL"]
-                positions[:, ind] = [hit.x, hit.y, hit.z, hit.E]
-                ind += 1
-            end
-            f(positions, idx, p4.t, [p4.x, p4.y, p4.z], pdg)
         end
     end
 
